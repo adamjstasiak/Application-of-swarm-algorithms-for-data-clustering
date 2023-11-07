@@ -1,7 +1,7 @@
 # khajit has wares if you have coin
 
 import numpy as np
-from random import choices,random,choice
+from random import choices,random,choice,sample
 from enum import Enum 
 
 def euclidean_metrics(x,y):
@@ -38,6 +38,7 @@ class CSO:
         # min_,max_ = np.min(X_train,axis=0), np.max(X_train,axis=0)
         # self.centroids = np.array([np.random.uniform(min_,max_) for i in range(self.n_clusters)])
         self.centroids = [choice(X_train)]
+        self.pop_ration = np.int((self.n_clusters*self.proportion)/100)
         for _ in range(self.n_clusters-1):
             dists = np.sum([euclidean_metrics(centroid, X_train) for centroid in self.centroids], axis=0)
             dists /= np.sum(dists)
@@ -51,19 +52,10 @@ class CSO:
         self.f_changes.append(self.j)
         self.best_centers =self.centroids
         self.velocity = [np.zeros(X_train[0].shape) for i in range(self.n_clusters)]
-        self.rest_cat = np.array(choices(self.centroids,k=np.int((self.n_clusters*self.proportion)/100)))
-        self.rest_idx = []
-        self.hunt_idx = []
-        for i in range(len(self.centroids)):
-            if self.centroids[i] not in self.rest_cat:
-                self.hunt_idx.append(i)
-            else:
-                self.rest_idx.append(i) 
+        self.rest_cat, self.rest_idx = self.choice_rest_cat()
         while iter < self.max_iter:
             self.hunting()
             self.rest_cat = self.resting(X_train)
-            print(len(self.rest_cat))
-            print(self.rest_idx)
             for i in range(len(self.rest_idx)):
                 self.centroids[self.rest_idx[i]]  = self.rest_cat[i]
             f_values = fitness_function(X_train,self.centroids)
@@ -71,18 +63,16 @@ class CSO:
                 self.j = f_values
                 self.best_centers = self.centroids
             self.f_changes.append(self.j) 
-            self.rest_cat = np.array(choices(self.centroids,k=np.int((self.n_clusters*self.proportion)/100)))
-            self.rest_idx = []
-            self.hunt_idx = []
-            for i in range(self.n_clusters):
-                if self.centroids[i] not in self.rest_cat:
-                    self.hunt_idx.append(i)
-                else:
-                    self.rest_idx.append(i) 
+            self.rest_cat, self.rest_idx = self.choice_rest_cat()
             iter += 1
 
-
-
+    def choice_rest_cat(self):
+        indexes = sample([i for i in range(self.n_clusters)],self.pop_ration)
+        rest_cat = []
+        for idx in indexes:
+            rest_cat.append(self.centroids[idx])
+        return np.array(rest_cat),indexes
+    
     def resting(self,X_train):
         new_cats = [np.zeros(X_train[0].shape) for i in range(len(self.rest_cat))] 
         for i  in range(len(self.rest_cat)):
@@ -115,7 +105,7 @@ class CSO:
         return new_cats
 
     def hunting(self):
-        for idx in self.hunt_idx:
+        for _ in range(self.n_clusters-self.pop_ration):
             r = random()
             self.velocity = self.velocity + r * self.c * (self.best_centers- self.centroids)
             self.velocity = np.where(self.velocity< self.max_velocity,self.velocity,self.max_velocity)
