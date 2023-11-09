@@ -16,7 +16,7 @@ def fitness_function(X_train,centroids):
     return j 
 
 class CSO:
-    def __init__(self,n_clusters,smp,cdc,srd,c,max_velocity=10,proportion=25,spc=False,max_iter=1000) -> None:
+    def __init__(self,n_clusters,smp,cdc,srd,c,choice_type='kmeans++',max_velocity=10,proportion=25,spc=False,max_iter=1000) -> None:
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.j = np.inf
@@ -30,21 +30,24 @@ class CSO:
         self.proportion = proportion
         self.max_velocity = max_velocity
         self.f_changes = []
+        self.choice_type = choice_type
         
 
     def fit_centroids(self,X_train):
         if self.cdc > len(X_train[0]):
             raise(ValueError)
-        # min_,max_ = np.min(X_train,axis=0), np.max(X_train,axis=0)
-        # self.centroids = np.array([np.random.uniform(min_,max_) for i in range(self.n_clusters)])
-        self.centroids = [choice(X_train)]
-        self.pop_ration = np.int((self.n_clusters*self.proportion)/100)
-        for _ in range(self.n_clusters-1):
-            dists = np.sum([euclidean_metrics(centroid, X_train) for centroid in self.centroids], axis=0)
-            dists /= np.sum(dists)
-            new_centroid_idx, = np.random.choice(range(len(X_train)), size=1, p=dists)
-            self.centroids += [X_train[new_centroid_idx]]
-        self.centroids = np.array(self.centroids)
+        if self.choice_type == 'standard':
+            min_,max_ = np.min(X_train,axis=0), np.max(X_train,axis=0)
+            self.centroids = np.array([np.random.uniform(min_,max_) for i in range(self.n_clusters)])
+        if self.choice_type == 'kmeans++':
+            self.centroids = [choice(X_train)]
+            self.pop_ration = np.int((self.n_clusters*self.proportion)/100)
+            for _ in range(self.n_clusters-1):
+                dists = np.sum([euclidean_metrics(centroid, X_train) for centroid in self.centroids], axis=0)
+                dists /= np.sum(dists)
+                new_centroid_idx, = np.random.choice(range(len(X_train)), size=1, p=dists)
+                self.centroids += [X_train[new_centroid_idx]]
+            self.centroids = np.array(self.centroids)
         iter = 0
         f_values = fitness_function(X_train,self.centroids)
         if f_values < self.j:
@@ -74,7 +77,7 @@ class CSO:
         return np.array(rest_cat),indexes
     
     def resting(self,X_train):
-        new_cats = [np.zeros(X_train[0].shape) for i in range(len(self.rest_cat))] 
+        new_cats = [np.zeros(X_train[0].shape) for _ in range(len(self.rest_cat))] 
         for i  in range(len(self.rest_cat)):
             candidates = [self.rest_cat[i] for _ in range(self.smp)]
             for cand in candidates:
@@ -107,9 +110,10 @@ class CSO:
     def hunting(self):
         for _ in range(self.n_clusters-self.pop_ration):
             r = random()
-            self.velocity = self.velocity + r * self.c * (self.best_centers- self.centroids)
+            self.velocity = self.velocity + r * self.c * (self.best_centers - self.centroids)
             self.velocity = np.where(self.velocity< self.max_velocity,self.velocity,self.max_velocity)
             self.centroids = self.centroids + self.velocity
+    
     def predict(self,X_train):
         centroids = []
         centroids_idx = []
