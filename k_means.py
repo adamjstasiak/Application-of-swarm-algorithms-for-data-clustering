@@ -4,6 +4,12 @@ def euclidean_metrics(x,y):
     distnace =np.sqrt(np.sum((x-y)**2,axis=1)) 
     return distnace
     
+def fitness_function(X_train,centroids):
+    j = 0
+    for x in X_train:
+        dist = euclidean_metrics(x,centroids)
+        j += np.sum(dist)
+    return j 
 class K_Means:
     def __init__(self,n_clusters=4,max_iter=1000) -> None:
         self.n_clusters = n_clusters
@@ -13,8 +19,7 @@ class K_Means:
         min_,max_ = np.min(X_train,axis = 0),np.max(X_train,axis=0)
 
         self.centroids = [np.random.uniform(min_,max_) for i in range(self.n_clusters)]
-      
-
+    
         iter = 0 
         prev_centroid = None
         
@@ -33,7 +38,7 @@ class K_Means:
                 if np.isnan(centroid).any():
                     self.centroids[i]= prev_centroid[i]
             iter += 1
-            
+        self.j = fitness_function(X_train,self.centroids)
     def predict(self,X_train):
         centroids = []
         centroids_idx = []
