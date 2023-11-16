@@ -4,9 +4,8 @@ import numpy as np
 from random import choices,random,choice,sample
 from enum import Enum 
 
-def euclidean_metrics(x,y):
-    distance = np.sqrt(np.sum((x-y)**2,axis=1))
-    return distance
+def euclidean_metrics(x,centroids):
+    return  np.sqrt(np.sum((x - centroids)**2,axis=1))
 
 def fitness_function(X_train,centroids):
     j = 0
@@ -16,7 +15,7 @@ def fitness_function(X_train,centroids):
     return j 
 
 class CSO:
-    def __init__(self,n_clusters,smp,cdc,srd,c,choice_type='kmeans++',max_velocity=10,proportion=25,spc=False,max_iter=1000) -> None:
+    def __init__(self,n_clusters,smp,cdc,srd,c,choice_type='kmeans++',const_population=False,centroids=[],max_velocity=10,proportion=25,spc=False,max_iter=1000) -> None:
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.j = np.inf
@@ -24,6 +23,9 @@ class CSO:
         self.smp = smp
         if self.spc == True:
             self.smp = smp-1
+        self.const_population = const_population
+        if self.const_population == True:
+            self.centroids = centroids
         self.cdc = cdc
         self.srd = srd
         self.c = c
@@ -31,29 +33,34 @@ class CSO:
         self.max_velocity = max_velocity
         self.f_changes = []
         self.choice_type = choice_type
-        
+        self.pop_ration = np.int((self.n_clusters*self.proportion)/100)
 
     def fit_centroids(self,X_train):
         if self.cdc > len(X_train[0]):
             raise(ValueError)
-        if self.choice_type == 'standard':
-            min_,max_ = np.min(X_train,axis=0), np.max(X_train,axis=0)
-            self.centroids = np.array([np.random.uniform(min_,max_) for i in range(self.n_clusters)])
-        if self.choice_type == 'kmeans++':
-            self.centroids = [choice(X_train)]
-            self.pop_ration = np.int((self.n_clusters*self.proportion)/100)
-            for _ in range(self.n_clusters-1):
-                dists = np.sum([euclidean_metrics(centroid, X_train) for centroid in self.centroids], axis=0)
-                dists /= np.sum(dists)
-                new_centroid_idx, = np.random.choice(range(len(X_train)), size=1, p=dists)
-                self.centroids += [X_train[new_centroid_idx]]
-            self.centroids = np.array(self.centroids)
+        if self.const_population == False:
+            if self.choice_type == 'standard':
+                min_,max_ = np.min(X_train,axis=0), np.max(X_train,axis=0)
+                self.centroids = np.array([np.random.uniform(min_,max_) for i in range(self.n_clusters)])
+            if self.choice_type == 'kmeans++':
+                self.centroids = [np.zeros(X_train.shape[0]) for _ in range(self.n_clusters)] 
+                self.centroids[0] = [choice(X_train)]
+                centroid_temp = []
+                for i in range(self.n_clusters-1):
+                    centroid_temp.append(self.centroids[i])
+                    dists = np.sum([euclidean_metrics(centroid,X_train) for centroid in centroid_temp],axis=0)
+                    dists /= np.sum(dists)
+                    new_centroid_idx = np.random.choice(range(len(X_train)), size=1, p=dists)
+                    self.centroids[i+1] = X_train[new_centroid_idx]
+                self.centroids = np.array(self.centroids)
+                self.centroids = np.reshape(self.centroids,(self.n_clusters,X_train.shape[1]))
         iter = 0
         f_values = fitness_function(X_train,self.centroids)
         if f_values < self.j:
             self.j = f_values
+        self.first_centers = self.centroids
         self.f_changes.append(self.j)
-        self.best_centers =self.centroids
+        self.best_centers = self.centroids
         self.velocity = [np.zeros(X_train[0].shape) for i in range(self.n_clusters)]
         self.rest_cat, self.rest_idx = self.choice_rest_cat()
         while iter < self.max_iter:
@@ -62,10 +69,11 @@ class CSO:
             for i in range(len(self.rest_idx)):
                 self.centroids[self.rest_idx[i]]  = self.rest_cat[i]
             f_values = fitness_function(X_train,self.centroids)
+            self.f_changes.append(self.j) 
             if f_values < self.j:
                 self.j = f_values
                 self.best_centers = self.centroids
-            self.f_changes.append(self.j) 
+            
             self.rest_cat, self.rest_idx = self.choice_rest_cat()
             iter += 1
 
@@ -115,14 +123,12 @@ class CSO:
             self.centroids = self.centroids + self.velocity
     
     def predict(self,X_train):
-        centroids = []
         centroids_idx = []
         for x in X_train:
             dist = euclidean_metrics(x,self.best_centers)
             idx = np.argmin(dist)
-            centroids.append(self.best_centers[idx])
             centroids_idx.append(idx)
-        return centroids, centroids_idx
+        return centroids_idx
 
 
 class Operations(Enum):
